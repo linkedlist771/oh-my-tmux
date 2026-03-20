@@ -33,10 +33,6 @@ is_true() {
   esac
 }
 
-if ! is_true "$PERMISSIVE" && [ -n "$TMUX" ]; then
-  printf '❌ tmux is currently running, please terminate the server\n' >&2 && exit 1
-fi
-
 reconfigure() {
   printf '🔧 Reconfiguring Oh my tmux! session persistence plugins...\n' >&2
 
@@ -53,6 +49,16 @@ reconfigure() {
   if [ -z "$TMUX_CONF_LOCAL" ]; then
     printf '❌ No existing .tmux.conf.local found, please run install first\n' >&2 && exit 1
   fi
+
+  # find existing tmux.conf (main config)
+  TMUX_CONF=""
+  for conf in "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf" \
+              "$HOME/.tmux.conf"; do
+    if [ -f "$conf" ] || [ -L "$conf" ]; then
+      TMUX_CONF="$conf"
+      break
+    fi
+  done
 
   printf '✅ Found %s\n' "${TMUX_CONF_LOCAL/#"$HOME"/'~'}" >&2
 
@@ -84,9 +90,39 @@ reconfigure() {
     printf '✅ Session persistence plugins are already enabled\n' >&2
   fi
 
+  # hot-reload if tmux is running
+  if [ -n "$TMUX" ] || tmux list-sessions >/dev/null 2>&1; then
+    printf '\n' >&2
+    printf '🔄 tmux is running, hot-reloading configuration...\n' >&2
+    tmux_cmd() {
+      ${TMUX_PROGRAM:-tmux} ${TMUX_SOCKET:+-S "$TMUX_SOCKET"} "$@"
+    }
+    if [ -n "$TMUX_CONF" ]; then
+      tmux_cmd source "$TMUX_CONF" 2>/dev/null && \
+        printf '✅ Configuration reloaded, no restart needed\n' >&2 || \
+        printf '⚠️  Auto-reload failed, please press <prefix> r to reload manually\n' >&2
+    else
+      printf '⚠️  Could not find main tmux.conf, please press <prefix> r to reload manually\n' >&2
+    fi
+  fi
+
   printf '\n' >&2
   printf '🎉 Reconfiguration complete 🎉\n' >&2
 }
+
+# handle --reconfigure flag before the tmux-running check
+for arg in "$@"; do
+  case "$arg" in
+    --reconfigure)
+      reconfigure
+      exit 0
+      ;;
+  esac
+done
+
+if ! is_true "$PERMISSIVE" && [ -n "$TMUX" ]; then
+  printf '❌ tmux is currently running, please terminate the server\n' >&2 && exit 1
+fi
 
 install() {
   printf '🎢 Installing Oh my tmux! Buckle up!\n' >&2
@@ -184,16 +220,6 @@ install() {
   printf '\n' >&2
   printf '🎉 Oh my tmux! successfully installed 🎉\n' >&2
 }
-
-# handle --reconfigure flag
-for arg in "$@"; do
-  case "$arg" in
-    --reconfigure)
-      reconfigure
-      exit 0
-      ;;
-  esac
-done
 
 if [ -p /dev/stdin ]; then
   printf '✋ STOP\n' >&2
