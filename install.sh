@@ -37,6 +37,57 @@ if ! is_true "$PERMISSIVE" && [ -n "$TMUX" ]; then
   printf '❌ tmux is currently running, please terminate the server\n' >&2 && exit 1
 fi
 
+reconfigure() {
+  printf '🔧 Reconfiguring Oh my tmux! session persistence plugins...\n' >&2
+
+  # find existing .tmux.conf.local
+  TMUX_CONF_LOCAL=""
+  for conf in "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/tmux.conf.local" \
+              "$HOME/.tmux.conf.local"; do
+    if [ -f "$conf" ]; then
+      TMUX_CONF_LOCAL="$conf"
+      break
+    fi
+  done
+
+  if [ -z "$TMUX_CONF_LOCAL" ]; then
+    printf '❌ No existing .tmux.conf.local found, please run install first\n' >&2 && exit 1
+  fi
+
+  printf '✅ Found %s\n' "${TMUX_CONF_LOCAL/#"$HOME"/'~'}" >&2
+
+  changed=false
+
+  # enable tmux-resurrect
+  if grep -q "^#set -g @plugin 'tmux-plugins/tmux-resurrect'" "$TMUX_CONF_LOCAL"; then
+    sed -i.bak "s/^#set -g @plugin 'tmux-plugins\/tmux-resurrect'/set -g @plugin 'tmux-plugins\/tmux-resurrect'/" "$TMUX_CONF_LOCAL"
+    changed=true
+  fi
+
+  # enable tmux-continuum
+  if grep -q "^#set -g @plugin 'tmux-plugins/tmux-continuum'" "$TMUX_CONF_LOCAL"; then
+    sed -i.bak "s/^#set -g @plugin 'tmux-plugins\/tmux-continuum'/set -g @plugin 'tmux-plugins\/tmux-continuum'/" "$TMUX_CONF_LOCAL"
+    changed=true
+  fi
+
+  # enable continuum-restore
+  if grep -q "^#set -g @continuum-restore 'on'" "$TMUX_CONF_LOCAL"; then
+    sed -i.bak "s/^#set -g @continuum-restore 'on'/set -g @continuum-restore 'on'/" "$TMUX_CONF_LOCAL"
+    changed=true
+  fi
+
+  rm -f "$TMUX_CONF_LOCAL.bak"
+
+  if is_true "$changed"; then
+    printf '✅ Enabled tmux-resurrect, tmux-continuum, and continuum-restore\n' >&2
+  else
+    printf '✅ Session persistence plugins are already enabled\n' >&2
+  fi
+
+  printf '\n' >&2
+  printf '🎉 Reconfiguration complete 🎉\n' >&2
+}
+
 install() {
   printf '🎢 Installing Oh my tmux! Buckle up!\n' >&2
   printf '\n' >&2
@@ -133,6 +184,16 @@ install() {
   printf '\n' >&2
   printf '🎉 Oh my tmux! successfully installed 🎉\n' >&2
 }
+
+# handle --reconfigure flag
+for arg in "$@"; do
+  case "$arg" in
+    --reconfigure)
+      reconfigure
+      exit 0
+      ;;
+  esac
+done
 
 if [ -p /dev/stdin ]; then
   printf '✋ STOP\n' >&2
