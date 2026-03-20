@@ -11,7 +11,7 @@
 # ------------------------------------------------------------------------------
 {
 if [ ${EUID:-$(id -u)} -eq 0 ]; then
-  printf '❌ Do not execute this script as root!\n' >&2 && exit 1
+  printf '⚠️  Running as root, configuration will be installed in /root\n' >&2
 fi
 
 if [ -z "$BASH_VERSION" ]; then
